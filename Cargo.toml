@@ -23,6 +23,7 @@ mint = "0.5.9"
 wgpu = "0.17.1"
 wgpu-core = { version = "0.17.1", features = ["vulkan"] }
 wgpu-hal = "0.17.1"
+color-eyre = "0.6.2"
 
 [target.'cfg(windows)'.dependencies]
 openxr = { git = "https://github.com/Ralith/openxrs", rev = "0177d2d", features = [

@@ -108,7 +108,6 @@ pub fn initialize_xr_graphics(
         _ => EnvironmentBlendMode::OPAQUE,
     };
 
-
     #[cfg(not(target_os = "android"))]
     let vk_target_version = vk::make_api_version(0, 1, 2, 0);
     #[cfg(not(target_os = "android"))]
@@ -405,7 +404,7 @@ pub fn initialize_xr_graphics(
         RenderAdapter(Arc::new(wgpu_adapter)),
         wgpu_instance,
         xr_instance.clone().into(),
-        session.clone().into_any_graphics().into(),
+        XrSession::Vulkan(session.clone()),
         blend_mode.into(),
         resolution.into(),
         swapchain_format.into(),
