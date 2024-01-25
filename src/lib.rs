@@ -8,6 +8,7 @@ pub mod xr_input;
 
 use std::fs::File;
 use std::io::{BufWriter, Write};
+use std::ptr;
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
 
@@ -16,6 +17,7 @@ use crate::xr_input::hands::hand_tracking::DisableHandTracking;
 use crate::xr_input::oculus_touch::ActionSets;
 use bevy::app::{AppExit, PluginGroupBuilder};
 use bevy::ecs::system::SystemState;
+use bevy::input::common_conditions;
 use bevy::prelude::*;
 use bevy::render::camera::{ManualTextureView, ManualTextureViewHandle, ManualTextureViews};
 use bevy::render::extract_resource::ExtractResourcePlugin;
@@ -25,15 +27,16 @@ use bevy::render::settings::RenderCreation;
 use bevy::render::{Render, RenderApp, RenderPlugin, RenderSet};
 use bevy::transform::systems::{propagate_transforms, sync_simple_transforms};
 use bevy::window::{PresentMode, PrimaryWindow, RawHandleWrapper};
+use crossbeam_channel::{RecvError, TrySendError};
 use graphics::extensions::XrExtensions;
 use graphics::{XrAppInfo, XrPreferdBlendMode};
 use input::XrInput;
 use openxr as xr;
 // use passthrough::{start_passthrough, supports_passthrough, XrPassthroughLayer};
 use resources::*;
-use xr::{FormFactor, FrameState};
+use xr::{FormFactor, FrameState, FrameWaiter};
 use xr_init::{
-    xr_only, xr_render_only, CleanupXrData, XrEarlyInitPlugin, XrShouldRender, XrStatus, XrHasWaited, xr_after_wait_only,
+    xr_only, xr_render_only, CleanupXrData, XrEarlyInitPlugin, XrShouldRender, XrStatus,
 };
 use xr_input::controllers::XrControllerType;
 use xr_input::hands::emulated::HandEmulationPlugin;
@@ -97,6 +100,9 @@ impl Plugin for OpenXrPlugin {
                         render_instance,
                     ),
                 });
+                let (sender, receiver) = crossbeam_channel::unbounded();
+                app.insert_resource(XrFrameStateReceiver(receiver));
+                app.insert_resource(XrFrameStateSender(sender));
                 app.insert_resource(XrStatus::Disabled);
                 app.world.send_event(StartXrSession);
             }
@@ -119,63 +125,69 @@ impl Plugin for OpenXrPlugin {
             PreUpdate,
             (
                 xr_reset_per_frame_resources,
-                xr_wait_frame.run_if(xr_only()),
+                receive_waited_frame.run_if(xr_only()),
                 locate_views.run_if(xr_only()),
                 apply_deferred,
             )
                 .chain()
-                .after(xr_poll_events),
+                .before(xr_poll_events),
         );
         let render_app = app.sub_app_mut(RenderApp);
         render_app.add_systems(
             Render,
-            xr_begin_frame
-                .run_if(xr_only()).run_if(xr_after_wait_only())
-                // .run_if(xr_render_only())
+            (xr_reset_per_frame_resources, xr_wait_frame)
+                .chain()
+                .run_if(xr_only())
                 .after(RenderSet::ExtractCommands)
+                .before(RenderSet::PrepareAssets),
+        );
+        render_app.add_systems(
+            Render,
+            xr_begin_frame
+                .run_if(xr_only())
+                // .run_if(xr_render_only())
+                .after(RenderSet::PrepareFlush)
                 .before(xr_pre_frame),
         );
         render_app.add_systems(
             Render,
             xr_pre_frame
-                .run_if(xr_only()).run_if(xr_after_wait_only())
+                .run_if(xr_only())
                 .run_if(xr_render_only())
-                // Do NOT touch this ordering! idk why but you can NOT just put in a RenderSet
-                // right before rendering
                 .before(render_system)
-                .after(RenderSet::ExtractCommands),
+                .after(RenderSet::PrepareFlush),
             // .in_set(RenderSet::Prepare),
         );
-        // render_app.add_systems(
-        //     Render,
-        //     (
-        //         locate_views,
-        //         xr_input::xr_camera::xr_camera_head_sync,
-        //         sync_simple_transforms,
-        //         propagate_transforms,
-        //     )
-        //         .chain()
-        //         .run_if(xr_only())
-        //         .run_if(xr_render_only())
-        //         .in_set(RenderSet::Prepare),
-        // );
+        render_app.add_systems(
+            Render,
+            (
+                locate_views,
+                xr_input::xr_camera::xr_camera_head_sync,
+                sync_simple_transforms,
+                propagate_transforms,
+            )
+                .chain()
+                .run_if(xr_only())
+                .run_if(xr_render_only())
+                .in_set(RenderSet::Prepare),
+        );
         render_app.add_systems(
             Render,
             xr_end_frame
-                .run_if(xr_only()).run_if(xr_after_wait_only())
+                .run_if(xr_only())
                 .run_if(xr_render_only())
                 .after(RenderSet::Render),
         );
         render_app.add_systems(
             Render,
             xr_skip_frame
-                .run_if(xr_only()).run_if(xr_after_wait_only())
+                .run_if(xr_only())
+                // .run_if(xr_after_wait_only())
                 .run_if(not(xr_render_only()))
                 .after(RenderSet::Render),
         );
     }
 }
-
 fn xr_skip_frame(
     xr_swapchain: Res<XrSwapchain>,
     xr_frame_state: Res<XrFrameState>,
@@ -188,7 +200,12 @@ fn xr_skip_frame(
             swap.stream
                 .lock()
                 .unwrap()
-                .end(xr_frame_state.predicted_display_time, **environment_blend_mode, &[]).unwrap();
+                .end(
+                    xr_frame_state.predicted_display_time,
+                    **environment_blend_mode,
+                    &[],
+                )
+                .unwrap();
         }
     }
 }
@@ -204,7 +221,7 @@ impl PluginGroup for DefaultXrPlugins {
     fn build(self) -> PluginGroupBuilder {
         DefaultPlugins
             .build()
-            .disable::<PipelinedRenderingPlugin>()
+            // .disable::<PipelinedRenderingPlugin>()
             .disable::<RenderPlugin>()
             .add_before::<RenderPlugin, _>(OpenXrPlugin {
                 prefered_blend_mode: self.prefered_blend_mode,
@@ -235,9 +252,8 @@ impl PluginGroup for DefaultXrPlugins {
     }
 }
 
-fn xr_reset_per_frame_resources(mut should: ResMut<XrShouldRender>,mut waited: ResMut<XrHasWaited>) {
+fn xr_reset_per_frame_resources(mut should: ResMut<XrShouldRender>) {
     **should = false;
-    **waited = false;
 }
 
 fn xr_poll_events(
@@ -289,35 +305,79 @@ fn xr_poll_events(
 
 fn xr_begin_frame(swapchain: Res<XrSwapchain>) {
     let _span = info_span!("xr_begin_frame").entered();
-    swapchain.begin().unwrap()
+    info!("begin_frame");
+    swapchain.begin();
+}
+
+fn receive_waited_frame(
+    receiver: Res<XrFrameStateReceiver>,
+    mut frame_state: ResMut<XrFrameState>,
+    mut should_render: ResMut<XrShouldRender>,
+) {
+    info!("Pre Receive Frame");
+    *frame_state = receiver.recv().unwrap();
+    **should_render = frame_state.should_render;
+    info!("Post Receive Frame");
 }
 
 pub fn xr_wait_frame(
-    mut frame_state: ResMut<XrFrameState>,
-    mut frame_waiter: ResMut<XrFrameWaiter>,
+    frame_state: Option<ResMut<XrFrameState>>,
+    session: Res<XrSession>,
     mut should_render: ResMut<XrShouldRender>,
-    mut waited: ResMut<XrHasWaited>,
+    mut commands: Commands,
+    sender: Res<XrFrameStateSender>,
 ) {
     {
         let _span = info_span!("xr_wait_frame").entered();
         info!("Pre Frame Wait");
-        *frame_state = match frame_waiter.wait() {
+        fn cvt(x: xr::sys::Result) -> Result<xr::sys::Result, xr::sys::Result> {
+            if x.into_raw() >= 0 {
+                Ok(x)
+            } else {
+                Err(x)
+            }
+        }
+        fn wait_frame(session: &XrSession) -> eyre::Result<FrameState> {
+            let out = unsafe {
+                let mut x = xr::sys::FrameState::out(ptr::null_mut());
+                cvt((session.instance().fp().wait_frame)(
+                    session.as_raw(),
+                    ptr::null(),
+                    x.as_mut_ptr(),
+                ))?;
+                x.assume_init()
+            };
+            Ok(FrameState {
+                predicted_display_time: out.predicted_display_time,
+                predicted_display_period: out.predicted_display_period,
+                should_render: out.should_render.into(),
+            })
+        }
+        let state: XrFrameState = match wait_frame(session.into_inner()) {
             Ok(a) => a.into(),
             Err(e) => {
                 warn!("error: {}", e);
                 return;
             }
         };
-        #[allow(clippy::erasing_op)]
-        {
-            frame_state.predicted_display_time = xr::Time::from_nanos(
-                frame_state.predicted_display_time.as_nanos()
-                    + (frame_state.predicted_display_period.as_nanos() * 0),
-            );
-        };
+        if let Err(TrySendError::Disconnected(_)) = sender.try_send(
+            FrameState {
+                predicted_display_time: xr::Time::from_nanos(
+                    state.predicted_display_time.as_nanos()
+                        + state.predicted_display_period.as_nanos(),
+                ),
+                ..*state
+            }
+            .into(),
+        ) {
+            panic!("Framestate Channel Disconnected, TODO: Make this Semi Recoverable?");
+        }
         info!("Post Frame Wait");
-        **should_render = frame_state.should_render;
-        **waited = true;
+        **should_render = state.should_render;
+        match frame_state {
+            Some(mut f) => *f = state,
+            None => commands.insert_resource(state),
+        }
     }
 }
 
@@ -353,6 +413,29 @@ pub fn xr_pre_frame(
     }
 }
 
+fn xr_dummy_frame_cycle(
+    environment_blend_mode: Res<XrEnvironmentBlendMode>,
+    swapchain: Res<XrSwapchain>,
+    xr_frame_state: Res<XrFrameState>,
+) {
+    info!("dummy_frame_cycle");
+    swapchain.begin().unwrap();
+    fn end_frame(
+        swapchain: &Swapchain,
+        environment_blend_mode: &XrEnvironmentBlendMode,
+        xr_frame_state: &XrFrameState,
+    ) {
+        let _ = match swapchain {
+            Swapchain::Vulkan(swapchain) => swapchain.stream.lock().unwrap().end(
+                xr_frame_state.predicted_display_time,
+                **environment_blend_mode,
+                &[],
+            ),
+        };
+    }
+    end_frame(&swapchain, &environment_blend_mode, &xr_frame_state)
+}
+
 pub fn xr_end_frame(
     xr_frame_state: Res<XrFrameState>,
     views: Res<XrViews>,
@@ -367,6 +450,7 @@ pub fn xr_end_frame(
         let vm = unsafe { jni::JavaVM::from_raw(ctx.vm().cast()) }.unwrap();
         let env = vm.attach_current_thread_as_daemon();
     }
+    info!("end_frame");
     {
         let _span = info_span!("xr_release_image").entered();
         swapchain.release_image().unwrap();

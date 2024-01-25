@@ -6,8 +6,9 @@ use crate::input::XrInput;
 // use crate::passthrough::XrPassthroughLayer;
 use crate::resource_macros::*;
 use crate::xr_init::XrStatus;
-use bevy::prelude::*;
-use bevy::render::extract_resource::ExtractResourcePlugin;
+use bevy::render::extract_resource::{ExtractResource, ExtractResourcePlugin};
+use bevy::{prelude::*, render::extract_component::ExtractComponent};
+use crossbeam_channel::{Receiver, Sender};
 use openxr as xr;
 
 xr_resource_wrapper!(XrInstance, xr::Instance);
@@ -21,7 +22,7 @@ xr_arc_resource_wrapper!(XrSessionRunning, AtomicBool);
 xr_arc_resource_wrapper!(XrSwapchain, Swapchain);
 xr_no_clone_resource_wrapper!(XrFrameWaiter, xr::FrameWaiter);
 
-pub(crate) struct VulkanOXrSessionSetupInfo {
+pub struct VulkanOXrSessionSetupInfo {
     pub(crate) device_ptr: *const c_void,
     pub(crate) physical_device_ptr: *const c_void,
     pub(crate) vk_instance_ptr: *const c_void,
@@ -29,7 +30,13 @@ pub(crate) struct VulkanOXrSessionSetupInfo {
     pub(crate) xr_system_id: xr::SystemId,
 }
 
-pub(crate) enum OXrSessionSetupInfo {
+#[derive(Resource, Deref, DerefMut, Clone, ExtractResource)]
+pub struct XrFrameStateSender(pub Sender<XrFrameState>);
+
+#[derive(Resource, Deref, DerefMut, Clone)]
+pub struct XrFrameStateReceiver(pub Receiver<XrFrameState>);
+
+pub enum OXrSessionSetupInfo {
     Vulkan(VulkanOXrSessionSetupInfo),
 }
 
@@ -46,6 +53,7 @@ impl Plugin for XrResourcePlugin {
         app.add_plugins(ExtractResourcePlugin::<XrEnvironmentBlendMode>::default());
         app.add_plugins(ExtractResourcePlugin::<XrSessionRunning>::default());
         app.add_plugins(ExtractResourcePlugin::<XrSession>::default());
+        app.add_plugins(ExtractResourcePlugin::<XrFrameStateSender>::default());
     }
 }
 
