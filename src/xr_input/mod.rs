@@ -71,7 +71,6 @@ impl Plugin for OpenXrInput {
             PreUpdate,
             xr_camera_head_sync
                 .run_if(xr_only())
-                .after(xr_wait_frame)
                 .after(locate_views),
         );
         //update controller trackers

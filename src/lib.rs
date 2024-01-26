@@ -8,14 +8,16 @@ pub mod xr_input;
 
 use std::fs::File;
 use std::io::{BufWriter, Write};
-use std::ptr;
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
+use std::{ptr, thread};
 
 use crate::xr_init::{StartXrSession, XrInitPlugin};
 use crate::xr_input::hands::hand_tracking::DisableHandTracking;
 use crate::xr_input::oculus_touch::ActionSets;
 use bevy::app::{AppExit, PluginGroupBuilder};
+use bevy::core::TaskPoolThreadAssignmentPolicy;
 use bevy::ecs::system::SystemState;
 use bevy::input::common_conditions;
 use bevy::prelude::*;
@@ -25,9 +27,10 @@ use bevy::render::pipelined_rendering::PipelinedRenderingPlugin;
 use bevy::render::renderer::{render_system, RenderInstance};
 use bevy::render::settings::RenderCreation;
 use bevy::render::{Render, RenderApp, RenderPlugin, RenderSet};
+use bevy::tasks::available_parallelism;
 use bevy::transform::systems::{propagate_transforms, sync_simple_transforms};
 use bevy::window::{PresentMode, PrimaryWindow, RawHandleWrapper};
-use crossbeam_channel::{RecvError, TrySendError};
+use crossbeam_channel::{RecvError, TryRecvError, TrySendError};
 use graphics::extensions::XrExtensions;
 use graphics::{XrAppInfo, XrPreferdBlendMode};
 use input::XrInput;
@@ -36,7 +39,7 @@ use openxr as xr;
 use resources::*;
 use xr::{FormFactor, FrameState, FrameWaiter};
 use xr_init::{
-    xr_only, xr_render_only, CleanupXrData, XrEarlyInitPlugin, XrShouldRender, XrStatus,
+    setup_xr, xr_only, xr_render_only, CleanupXrData, XrEarlyInitPlugin, XrShouldRender, XrStatus,
 };
 use xr_input::controllers::XrControllerType;
 use xr_input::hands::emulated::HandEmulationPlugin;
@@ -49,6 +52,9 @@ const VIEW_TYPE: xr::ViewConfigurationType = xr::ViewConfigurationType::PRIMARY_
 
 pub const LEFT_XR_TEXTURE_HANDLE: ManualTextureViewHandle = ManualTextureViewHandle(1208214591);
 pub const RIGHT_XR_TEXTURE_HANDLE: ManualTextureViewHandle = ManualTextureViewHandle(3383858418);
+
+// #[derive(Clone,)]
+// pub struct XrFrameStateSyncer {}
 
 /// Adds OpenXR support to an App
 #[derive(Default)]
@@ -130,23 +136,40 @@ impl Plugin for OpenXrPlugin {
                 apply_deferred,
             )
                 .chain()
+                .before(setup_xr)
                 .before(xr_poll_events),
         );
         let render_app = app.sub_app_mut(RenderApp);
         render_app.add_systems(
             Render,
-            (xr_reset_per_frame_resources, xr_wait_frame)
+            (|| info!("!frame start!")).in_set(RenderSet::ExtractCommands),
+        );
+        render_app.add_systems(
+            Render,
+            (|| info!("!frame start 2!")).in_set(RenderSet::PrepareAssets),
+        );
+        render_app.add_systems(
+            Render,
+            (|| info!("!frame end!")).in_set(RenderSet::CleanupFlush),
+        );
+        render_app.add_systems(
+            Render,
+            (
+                (|xr_status: Option<Res<XrStatus>>| info!("{:?}", xr_status)),
+                (|xr_status: Res<XrStatus>| info!("{:?}", xr_only()(xr_status))),
+                xr_reset_per_frame_resources.run_if(xr_only()),
+                xr_wait_frame.run_if(xr_only()),
+            )
                 .chain()
-                .run_if(xr_only())
-                .after(RenderSet::ExtractCommands)
-                .before(RenderSet::PrepareAssets),
+                .in_set(RenderSet::PrepareFlush),
         );
         render_app.add_systems(
             Render,
             xr_begin_frame
                 .run_if(xr_only())
                 // .run_if(xr_render_only())
-                .after(RenderSet::PrepareFlush)
+                .in_set(RenderSet::Prepare)
+                // .after(RenderSet::PrepareFlush)
                 .before(xr_pre_frame),
         );
         render_app.add_systems(
@@ -155,8 +178,8 @@ impl Plugin for OpenXrPlugin {
                 .run_if(xr_only())
                 .run_if(xr_render_only())
                 .before(render_system)
-                .after(RenderSet::PrepareFlush),
-            // .in_set(RenderSet::Prepare),
+                // .after(RenderSet::PrepareFlush),
+                .in_set(RenderSet::Prepare),
         );
         render_app.add_systems(
             Render,
@@ -176,7 +199,7 @@ impl Plugin for OpenXrPlugin {
             xr_end_frame
                 .run_if(xr_only())
                 .run_if(xr_render_only())
-                .after(RenderSet::Render),
+                .in_set(RenderSet::Cleanup),
         );
         render_app.add_systems(
             Render,
@@ -184,8 +207,47 @@ impl Plugin for OpenXrPlugin {
                 .run_if(xr_only())
                 // .run_if(xr_after_wait_only())
                 .run_if(not(xr_render_only()))
-                .after(RenderSet::Render),
+                .in_set(RenderSet::Cleanup),
         );
+
+        // let set = {
+        //     use RenderSet::*;
+        //     &[
+        //         ExtractCommands,
+        //         PrepareAssets,
+        //         ManageViews,
+        //         ManageViewsFlush,
+        //         Queue,
+        //         // QueueMeshes,
+        //         PhaseSort,
+        //         // Prepare,
+        //         PrepareResources,
+        //         PrepareResourcesFlush,
+        //         PrepareBindGroups,
+        //         PrepareFlush,
+        //         Render,
+        //         RenderFlush,
+        //         Cleanup,
+        //         CleanupFlush,
+        //     ]
+        // };
+        // for i in 0..set.len() {
+        //     let last = set.get(i - 1);
+        //     let curr = set.get(i).unwrap();
+        //     let next = set.get(i + 1);
+        //
+        //     let curr1 = curr.clone();
+        //     let curr2 = curr.clone();
+        //     let mut before = (move || info!("pre {:?}", curr1)).before(curr.clone());
+        //     let mut after = (move || info!("post {:?}", curr2)).after(curr.clone());
+        //     if let Some(next) = next {
+        //         after = after.before(next.clone());
+        //     }
+        //     if let Some(last) = last {
+        //         before = before.after(last.clone());
+        //     }
+        //     render_app.add_systems(Render, (before, after));
+        // }
     }
 }
 fn xr_skip_frame(
@@ -221,6 +283,19 @@ impl PluginGroup for DefaultXrPlugins {
     fn build(self) -> PluginGroupBuilder {
         DefaultPlugins
             .build()
+            .set(TaskPoolPlugin {
+                task_pool_options: TaskPoolOptions {
+                    compute: TaskPoolThreadAssignmentPolicy {
+                        // set the minimum # of compute threads
+                        // to the total number of available threads
+                        min_threads: available_parallelism(),
+                        max_threads: std::usize::MAX, // unlimited max threads
+                        percent: 1.0,                 // this value is irrelevant in this case
+                    },
+                    // keep the defaults for everything else
+                    ..default()
+                },
+            })
             // .disable::<PipelinedRenderingPlugin>()
             .disable::<RenderPlugin>()
             .add_before::<RenderPlugin, _>(OpenXrPlugin {
@@ -254,6 +329,7 @@ impl PluginGroup for DefaultXrPlugins {
 
 fn xr_reset_per_frame_resources(mut should: ResMut<XrShouldRender>) {
     **should = false;
+    info!("reset_resources");
 }
 
 fn xr_poll_events(
@@ -315,8 +391,21 @@ fn receive_waited_frame(
     mut should_render: ResMut<XrShouldRender>,
 ) {
     info!("Pre Receive Frame");
-    *frame_state = receiver.recv().unwrap();
-    **should_render = frame_state.should_render;
+    loop {
+        match receiver.try_recv() {
+            Ok(state) => {
+                *frame_state = state;
+                **should_render = frame_state.should_render;
+                break;
+            }
+            Err(TryRecvError::Empty) => {
+                thread::sleep(Duration::from_millis(1));
+            }
+            v => {
+                v.unwrap();
+            }
+        }
+    }
     info!("Post Receive Frame");
 }
 
@@ -327,6 +416,7 @@ pub fn xr_wait_frame(
     mut commands: Commands,
     sender: Res<XrFrameStateSender>,
 ) {
+    info!("Called xr_wait_frame");
     {
         let _span = info_span!("xr_wait_frame").entered();
         info!("Pre Frame Wait");
