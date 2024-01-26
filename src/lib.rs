@@ -340,6 +340,7 @@ pub fn xr_wait_frame(
             frame_state.predicted_display_time.as_nanos()
                 + frame_state.predicted_display_period.as_nanos(),
         );
+        info!("{}",frame_state.predicted_display_period.as_nanos());
         info!("Post Frame Wait");
         **should_render = frame_state.should_render;
         **waited = true;
