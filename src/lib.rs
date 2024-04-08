@@ -21,13 +21,14 @@ use bevy::render::pipelined_rendering::PipelinedRenderingPlugin;
 use bevy::render::renderer::{render_system, RenderInstance};
 use bevy::render::settings::RenderCreation;
 use bevy::render::{Render, RenderApp, RenderPlugin, RenderSet};
-use bevy::window::{PresentMode, PrimaryWindow, RawHandleWrapper};
+use bevy::window::{ApplicationLifetime, PresentMode, PrimaryWindow, RawHandleWrapper};
 use graphics::extensions::XrExtensions;
 use graphics::{XrAppInfo, XrPreferdBlendMode};
 use input::XrInput;
 use openxr as xr;
 use passthrough::{PassthroughPlugin, XrPassthroughLayer, XrPassthroughState};
 use resources::*;
+use xr::FrameState;
 use xr_init::{
     xr_after_wait_only, xr_only, xr_render_only, CleanupRenderWorld, CleanupXrData,
     ExitAppOnSessionExit, SetupXrData, StartSessionOnStartup, XrCleanup, XrEarlyInitPlugin,
@@ -364,22 +365,25 @@ fn xr_poll_events(
                             session_running.store(true, std::sync::atomic::Ordering::Relaxed);
                         }
                         xr::SessionState::STOPPING => {
-                            session.end().unwrap();
+                            // session.end().unwrap();
                             session_running.store(false, std::sync::atomic::Ordering::Relaxed);
-                            cleanup_xr.send_default();
+                            // cleanup_xr.send_default();
                         }
                         xr::SessionState::EXITING => {
                             if *exit_type == ExitAppOnSessionExit::Always
                                 || *exit_type == ExitAppOnSessionExit::OnlyOnExit
                             {
+                                cleanup_xr.send_default();
                                 app_exit.send_default();
                             }
                         }
                         xr::SessionState::LOSS_PENDING => {
                             if *exit_type == ExitAppOnSessionExit::Always {
+                                cleanup_xr.send_default();
                                 app_exit.send_default();
                             }
                             if *exit_type == ExitAppOnSessionExit::OnlyOnExit {
+                                cleanup_xr.send_default();
                                 start_session.send_default();
                             }
                         }
@@ -406,6 +410,34 @@ pub fn xr_wait_frame(
     // mut should_render: ResMut<XrShouldRender>,
     // mut waited: ResMut<XrHasWaited>,
 ) {
+    let app_events = {
+        let events = world.get_resource::<Events<ApplicationLifetime>>().unwrap();
+        let mut reader = events.get_reader();
+        reader.read(events).copied().collect::<Vec<_>>()
+    };
+    if app_events
+        .into_iter()
+        .any(|e| e == ApplicationLifetime::Suspended)
+    {
+        let state: FrameState = **world.get_resource::<XrFrameState>().unwrap();
+        *world.get_resource_mut::<XrFrameState>().unwrap() = FrameState {
+            predicted_display_time: xr::Time::from_nanos(
+                state.predicted_display_time.as_nanos() + state.predicted_display_period.as_nanos(),
+            ),
+            predicted_display_period: state.predicted_display_period,
+            should_render: false,
+        }
+        .into();
+
+        **world.get_resource_mut::<XrShouldRender>().unwrap() = false;
+        **world.get_resource_mut::<XrHasWaited>().unwrap() = false;
+        // world
+        //     .get_resource::<XrSwapchain>()
+        //     .unwrap()
+        //     .begin()
+        //     .unwrap();
+        return;
+    }
     let mut frame_waiter = world.get_resource_mut::<XrFrameWaiter>().unwrap();
     {
         let _span = info_span!("xr_wait_frame").entered();
