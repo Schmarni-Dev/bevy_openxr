@@ -9,8 +9,58 @@ bevy.workspace = true
 
 # all dependencies are placed under this since on anything but wasm, this crate is completely empty
 [target.'cfg(target_family = "wasm")'.dependencies]
+js-sys = "0.3"
+web-sys = { version = "0.3", features = [
+	"WebGlContextAttributes",
+	"WebGlPowerPreference",
+	# enable all the xr features
+	"XrBoundedReferenceSpace",
+	"XrEye",
+	"XrFrame",
+	"XrHand",
+	"XrHandJoint",
+	"XrHandedness",
+	"XrInputSource",
+	"XrInputSourceArray",
+	"XrInputSourceEvent",
+	"XrInputSourceEventInit",
+	"XrInputSourcesChangeEvent",
+	"XrInputSourcesChangeEventInit",
+	"XrJointPose",
+	"XrJointSpace",
+	"XrLayer",
+	"XrPermissionDescriptor",
+	"XrPermissionStatus",
+	"XrPose",
+	"XrReferenceSpace",
+	"XrReferenceSpaceEvent",
+	"XrReferenceSpaceEventInit",
+	"XrReferenceSpaceType",
+	"XrRenderState",
+	"XrRenderStateInit",
+	"XrRigidTransform",
+	"XrSession",
+	"XrSessionEvent",
+	"XrSessionEventInit",
+	"XrSessionInit",
+	"XrSessionMode",
+	"XrSessionSupportedPermissionDescriptor",
+	"XrSpace",
+	"XrSystem",
+	"XrTargetRayMode",
+	"XrView",
+	"XrViewerPose",
+	"XrViewport",
+	"XrVisibilityState",
+	"XrWebGlLayer",
+	"XrWebGlLayerInit",
+] }
 thiserror = "1.0.57"
 wgpu = "0.19.3"
 wgpu-hal = "0.19.3"
+winit = { version = "0.29", default-features = false, features = ["rwh_06"] }
+wasm-bindgen = { version = "0.2" }
+wasm-bindgen-futures = "0.4"
+raw-window-handle = "0.6"
 
 bevy_xr.path = "../bevy_xr"

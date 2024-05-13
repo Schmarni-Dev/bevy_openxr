@@ -9,10 +9,12 @@ license = "MIT/Apache-2.0"
 [dependencies]
 bevy_openxr.path = "./crates/bevy_openxr"
 bevy_xr.path = "./crates/bevy_xr"
-bevy = "0.13.0"
+bevy.workspace = true
 
 [workspace]
-members = ["crates/*", "crates/bevy_openxr/examples/android"]
+members = ["crates/*", "crates/bevy_openxr/examples/android","crates/bevy_webxr/examples/minimal"]
 
 [workspace.dependencies]
-bevy = "0.13.0"
+bevy = "0.13.2"
+[profile.release]
+debug = true
