@@ -19,7 +19,9 @@ use bevy_xr::session::XrStatusChanged;
 use raw_window_handle::{WebCanvasWindowHandle, WebDisplayHandle};
 use wasm_bindgen::{closure::Closure, JsCast, JsValue};
 use wasm_bindgen_futures::spawn_local;
-use web_sys::{HtmlCanvasElement, WebGlContextAttributes, XrFrame, XrSystem};
+use web_sys::{
+    HtmlCanvasElement, WebGl2RenderingContext, WebGlContextAttributes, XrFrame, XrSystem,
+};
 
 use crate::{
     future_util::ToJsFuture,
@@ -157,14 +159,13 @@ fn setup_main_window(app: &mut App) {
     webgl_layer_attrs.alpha(true);
     webgl_layer_attrs.xr_compatible(true);
     webgl_layer_attrs.power_preference(web_sys::WebGlPowerPreference::HighPerformance);
-    unsafe {
-        let e = w.as_ptr();
-        (*e).dyn_ref::<HtmlCanvasElement>()
-            .unwrap()
-            .get_context_with_context_options("webgl2", &webgl_layer_attrs)
-            .unwrap()
-            .unwrap();
-    }
+    let webgl_ctx = canvas
+        .get_context_with_context_options("webgl2", &webgl_layer_attrs)
+        .unwrap()
+        .unwrap()
+        .dyn_into::<WebGl2RenderingContext>()
+        .unwrap();
+    app.world.insert_resource(WxrWebGl2Context(webgl_ctx));
 
     let raw_handle =
         raw_window_handle::RawWindowHandle::WebCanvas(WebCanvasWindowHandle::new(w.cast()));
@@ -195,6 +196,18 @@ fn setup_runner(mut app: App) {
         request_animation_frame(&app.borrow());
     });
 }
+
+#[derive(Resource,Deref,DerefMut)]
+pub struct WxrFrame(pub XrFrame);
+
+// SAFETY: idk
+unsafe impl Send for WxrFrame {}
+unsafe impl Sync for WxrFrame {}
+#[derive(Resource,Deref,DerefMut)]
+pub struct WxrWebGl2Context(pub WebGl2RenderingContext);
+// SAFETY: idk
+unsafe impl Send for WxrWebGl2Context {}
+unsafe impl Sync for WxrWebGl2Context {}
 
 fn setup_canvas_callbacks(app: &mut App, sender: mpsc::Sender<WxrCanvasEvent>) {
     // let canvas = app.world.get_nn_send_resource::<WxrCanvas>().unwrap();
@@ -334,7 +347,7 @@ fn setup_xr_session_frame_handler(app: Rc<RefCell<App>>) {
         .insert_non_send_resource(WxrRunnerXrFrameEventHandler(Closure::new(
             move |time, xr_frame| {
                 let mut app = app.borrow_mut();
-                info!("Session Frame");
+                app.insert_resource(WxrFrame(xr_frame));
                 common_update(&mut app);
             },
         )));
@@ -346,14 +359,12 @@ fn request_animation_frame(app: &App) {
             .world
             .get_non_send_resource::<WxrRunnerXrFrameEventHandler>()
             .unwrap();
-        info!("requesting XR frame");
         session.request_animation_frame(handler.0.as_ref().unchecked_ref());
     } else {
         let handler = app
             .world
             .get_non_send_resource::<WxrRunnerCanvasFrameEventHandler>()
             .unwrap();
-        info!("requesting Window frame");
         web_sys::window()
             .unwrap()
             .request_animation_frame(handler.0.as_ref().unchecked_ref())
@@ -368,7 +379,7 @@ fn setup_canvas_frame_handler(app: Rc<RefCell<App>>) {
         .insert_non_send_resource(WxrRunnerCanvasFrameEventHandler(Closure::new(
             move |time| {
                 let mut app = app.borrow_mut();
-                info!("Canvas Frame: {time}");
+                app.world.remove_resource::<WxrFrame>();
                 common_update(&mut app);
             },
         )));

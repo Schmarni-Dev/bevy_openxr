@@ -3,9 +3,15 @@ use std::sync::mpsc::{channel, Receiver, Sender};
 use bevy::{prelude::*, utils::HashSet};
 use wasm_bindgen::{JsCast, JsValue};
 use wasm_bindgen_futures::spawn_local;
-use web_sys::{XrSession, XrSessionInit, XrSessionMode};
+use web_sys::{
+    XrRenderState, XrRenderStateInit, XrSession, XrSessionInit, XrSessionMode, XrWebGlLayer,
+    XrWebGlLayerInit,
+};
 
-use crate::{future_util::ToJsFuture, runner::WxrSystem};
+use crate::{
+    future_util::ToJsFuture,
+    runner::{WxrSystem, WxrWebGl2Context},
+};
 pub struct WxrSessionPlugin;
 
 #[derive(Clone, Copy, Hash)]
@@ -93,35 +99,66 @@ impl Plugin for WxrSessionPlugin {
         app.insert_resource(SessionCreatedReader(rx));
         app.insert_resource(SessionCreatedWriter(tx));
         app.init_resource::<WxrRequestedSessionMode>();
+        app.add_event::<WxrSessionCreated>();
         app.add_systems(
-            PreUpdate,
+            First,
             (
                 create_session.run_if(on_event::<bevy_xr::session::CreateXrSession>()),
                 insert_session,
+                configure_session.run_if(on_event::<WxrSessionCreated>()),
             )
                 .chain(),
         );
     }
 }
 
+#[derive(Event, Clone, Copy, Default)]
+pub struct WxrSessionCreated;
+
 #[derive(Deref, DerefMut, Resource)]
 pub struct WxrSession {
     #[deref]
-    session: XrSession,
-    mode: WxrSessionMode,
+    pub session: XrSession,
+    pub mode: WxrSessionMode,
 }
 // SAFETY: idk probably bad
 unsafe impl Send for WxrSession {}
 unsafe impl Sync for WxrSession {}
 
-fn insert_session(mut cmds: Commands, recv: Res<SessionCreatedReader>) {
+fn insert_session(
+    mut cmds: Commands,
+    recv: Res<SessionCreatedReader>,
+    mut created: EventWriter<WxrSessionCreated>,
+) {
     while let Ok((session, session_mode)) = recv.0.try_recv() {
         info!("Session Created!");
         cmds.insert_resource(WxrSession {
             session,
             mode: session_mode,
         });
+        created.send_default();
     }
+}
+#[derive(Resource, Deref, DerefMut)]
+pub struct WxrWebGlLayer(XrWebGlLayer);
+// SAFETY: idk probably bad
+unsafe impl Send for WxrWebGlLayer {}
+unsafe impl Sync for WxrWebGlLayer {}
+
+fn configure_session(world: &mut World) {
+    let layer = {
+        let session = world.get_resource::<WxrSession>().unwrap();
+        let gl_ctx = world.get_resource::<WxrWebGl2Context>().unwrap();
+        let mut layer = XrWebGlLayerInit::new();
+        layer.alpha(true);
+        XrWebGlLayer::new_with_web_gl2_rendering_context_and_layer_init(session, gl_ctx, &layer)
+            .unwrap()
+    };
+    world.insert_resource(WxrWebGlLayer(layer));
+    let mut state = XrRenderStateInit::new();
+    state.base_layer(Some(world.get_resource::<WxrWebGlLayer>().unwrap()));
+    let session = world.get_resource::<WxrSession>().unwrap();
+    session.update_render_state_with_state(&state);
 }
 
 #[derive(Resource)]
