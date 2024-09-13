@@ -7,6 +7,10 @@ repository.workspace = true
 license.workspace = true
 keywords = ["gamedev", "bevy", "Xr", "Vr", "OpenXR"]
 
+[package.metadata.docs.rs]
+features = ["bevy/x11"]
+all-features = true
+
 [features]
 default = ["vulkan", "d3d12", "passthrough"]
 vulkan = ["dep:ash"]

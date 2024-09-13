@@ -6,6 +6,10 @@ license.workspace = true
 repository.workspace = true
 description = "utils for bevy_mod_xr and bevy_mod_openxr"
 
+[package.metadata.docs.rs]
+features = ["bevy/x11"]
+all-features = true
+
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]

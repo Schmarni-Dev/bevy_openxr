@@ -7,6 +7,10 @@ license.workspace = true
 repository.workspace = true
 keywords = ["gamedev", "bevy", "Xr", "Vr"]
 
+[package.metadata.docs.rs]
+features = ["bevy/x11"]
+all-features = true
+
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]

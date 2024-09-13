@@ -6,6 +6,11 @@ edition.workspace = true
 repository.workspace = true
 license.workspace = true
 
+[package.metadata.docs.rs]
+features = ["bevy/x11"]
+all-features = true
+
+
 # bevy can't be placed behind target or proc macros won't work properly
 [dependencies]
 bevy.workspace = true
