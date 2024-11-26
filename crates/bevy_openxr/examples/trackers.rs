@@ -1,0 +1,211 @@
+use std::ops::Deref;
+
+use bevy::prelude::*;
+use bevy_mod_openxr::{
+    action_binding::{OxrSendActionBindings, OxrSuggestActionBinding},
+    action_set_attaching::OxrAttachActionSet,
+    action_set_syncing::{OxrActionSetSyncSet, OxrSyncActionSet},
+    add_xr_plugins,
+    exts::OxrExtensions,
+    init::OxrInitPlugin,
+    resources::OxrInstance,
+    session::OxrSession,
+    spaces::OxrSpaceExt,
+};
+use bevy_mod_xr::{
+    session::{session_available, session_running, XrSessionCreated, XrTrackingRoot},
+    spaces::XrSpace,
+    types::XrPose,
+};
+use openxr::Posef;
+
+fn main() {
+    let mut app = App::new();
+    app.add_plugins(add_xr_plugins(DefaultPlugins).build().set(OxrInitPlugin {
+        exts: {
+            let mut exts = OxrExtensions::default();
+            exts.enable_hand_tracking();
+            exts.other.push("XR_HTCX_vive_tracker_interaction\0".into());
+            exts
+        },
+        ..Default::default()
+    }));
+    app.add_systems(XrSessionCreated, spawn_hands);
+    app.add_systems(XrSessionCreated, attach_set);
+    app.add_systems(
+        PreUpdate,
+        sync_actions
+            .before(OxrActionSetSyncSet)
+            .run_if(session_running),
+    );
+    app.add_systems(OxrSendActionBindings, suggest_action_bindings);
+    app.add_systems(Startup, create_actions.run_if(session_available));
+    app.add_systems(Startup, setup);
+
+    app.run();
+}
+
+fn attach_set(actions: Res<ControllerActions>, mut attach: EventWriter<OxrAttachActionSet>) {
+    attach.send(OxrAttachActionSet(actions.set.clone()));
+}
+
+#[derive(Resource)]
+struct ControllerActions {
+    set: openxr::ActionSet,
+    left: openxr::Action<Posef>,
+    right: openxr::Action<Posef>,
+    tracker: openxr::Action<Posef>,
+}
+fn sync_actions(actions: Res<ControllerActions>, mut sync: EventWriter<OxrSyncActionSet>) {
+    sync.send(OxrSyncActionSet(actions.set.clone()));
+}
+/// set up a simple 3D scene
+fn setup(
+    mut commands: Commands,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+) {
+    // circular base
+    commands.spawn(PbrBundle {
+        mesh: meshes.add(Circle::new(4.0)),
+        material: materials.add(Color::WHITE),
+        transform: Transform::from_rotation(Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2)),
+        ..default()
+    });
+    // cube
+    commands.spawn(PbrBundle {
+        mesh: meshes.add(Cuboid::new(1.0, 1.0, 1.0)),
+        material: materials.add(Color::srgb_u8(124, 144, 255)),
+        transform: Transform::from_xyz(0.0, 0.5, 0.0),
+        ..default()
+    });
+    // light
+    commands.spawn(PointLightBundle {
+        point_light: PointLight {
+            shadows_enabled: true,
+            ..default()
+        },
+        transform: Transform::from_xyz(4.0, 8.0, 4.0),
+        ..default()
+    });
+    commands.spawn(Camera3dBundle {
+        transform: Transform::from_xyz(-2.5, 4.5, 9.0).looking_at(Vec3::ZERO, Vec3::Y),
+        ..default()
+    });
+}
+fn suggest_action_bindings(
+    actions: Res<ControllerActions>,
+    mut bindings: EventWriter<OxrSuggestActionBinding>,
+) {
+    bindings.send(OxrSuggestActionBinding {
+        action: actions.left.as_raw(),
+        interaction_profile: "/interaction_profiles/oculus/touch_controller".into(),
+        bindings: vec!["/user/hand/left/input/grip/pose".into()],
+    });
+    bindings.send(OxrSuggestActionBinding {
+        action: actions.right.as_raw(),
+        interaction_profile: "/interaction_profiles/oculus/touch_controller".into(),
+        bindings: vec!["/user/hand/right/input/grip/pose".into()],
+    });
+    bindings.send(OxrSuggestActionBinding {
+        action: actions.tracker.as_raw(),
+        interaction_profile: "/interaction_profiles/htc/vive_tracker_htcx".into(),
+        bindings: vec!["/user/vive_tracker_htcx/role/chest/input/grip/pose".into()],
+    });
+}
+fn create_actions(instance: Res<OxrInstance>, mut cmds: Commands) {
+    let set = instance.create_action_set("hands", "Hands", 0).unwrap();
+    let left = set
+        .create_action("left_pose", "Left Hand Grip Pose", &[])
+        .unwrap();
+    let right = set
+        .create_action("right_pose", "Right Hand Grip Pose", &[])
+        .unwrap();
+    let tracker_path = instance
+        .string_to_path("/user/vive_tracker_htcx/role/chest")
+        .unwrap();
+    let tracker = set
+        .create_action("tracker_pose", "Tracker Pose", &[tracker_path])
+        .unwrap();
+
+    cmds.insert_resource(ControllerActions {
+        set,
+        left,
+        right,
+        tracker,
+    })
+}
+
+fn spawn_hands(
+    actions: Res<ControllerActions>,
+    mut cmds: Commands,
+    root: Query<Entity, With<XrTrackingRoot>>,
+    session: Res<OxrSession>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+) {
+    // This is a demonstation of how to integrate with the openxr crate, the right space is the
+    // recommended way
+    let left_space = XrSpace::from_openxr_space(
+        actions
+            .left
+            .create_space(
+                session.deref().deref().clone(),
+                openxr::Path::NULL,
+                Posef::IDENTITY,
+            )
+            .unwrap(),
+    );
+    let right_space = session
+        .create_action_space(&actions.right, openxr::Path::NULL, XrPose::IDENTITY)
+        .unwrap();
+    let left = cmds
+        .spawn((
+            PbrBundle {
+                mesh: meshes.add(Cuboid::new(0.1, 0.1, 0.05)),
+                material: materials.add(Color::srgb_u8(124, 144, 255)),
+                transform: Transform::from_xyz(0.0, 0.5, 0.0),
+                ..default()
+            },
+            left_space,
+            TrackedDevice,
+        ))
+        .id();
+    let right = cmds
+        .spawn((
+            PbrBundle {
+                mesh: meshes.add(Cuboid::new(0.1, 0.1, 0.05)),
+                material: materials.add(Color::srgb_u8(124, 144, 255)),
+                transform: Transform::from_xyz(0.0, 0.5, 0.0),
+                ..default()
+            },
+            right_space,
+            TrackedDevice,
+        ))
+        .id();
+
+    let chest_path = session
+        .instance()
+        .string_to_path("/user/vive_tracker_htcx/role/chest")
+        .unwrap();
+    let tracker_space = session
+        .create_action_space(&actions.tracker, chest_path, XrPose::IDENTITY)
+        .unwrap();
+    let tracker = cmds
+        .spawn((
+            PbrBundle {
+                mesh: meshes.add(Sphere::new(0.05)),
+                material: materials.add(Color::srgb_u8(124, 0, 124)),
+                transform: Transform::from_xyz(0.0, 0.5, 0.0),
+                ..default()
+            },
+            tracker_space,
+            TrackedDevice,
+        ))
+        .id();
+    cmds.entity(root.single())
+        .push_children(&[left, right, tracker]);
+}
+
+#[derive(Component)]
+struct TrackedDevice;
