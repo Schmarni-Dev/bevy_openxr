@@ -169,12 +169,8 @@ fn update_space_transforms(
             match session.locate_space_with_velocity(space, ref_space, time) {
                 Ok((location, space_velocity)) => {
                     let flags = OxrSpaceVelocityFlags(space_velocity.velocity_flags);
-                    if flags.linear_valid() {
-                        velocity.linear = space_velocity.linear_velocity.to_vec3();
-                    }
-                    if flags.linear_valid() {
-                        velocity.linear = space_velocity.linear_velocity.to_vec3();
-                    }
+                    velocity.linear = space_velocity.linear_velocity.to_vec3();
+                    velocity.linear = space_velocity.linear_velocity.to_vec3();
                     let Some(mut vel_flags) = oxr_space_velocity_flags else {
                         error!("XrVelocity without OxrSpaceVelocityFlags");
                         return;
@@ -184,8 +180,8 @@ fn update_space_transforms(
                         return;
                     };
                     *vel_flags = flags;
-                    xr_vel_flags.linear_valid = vel_flags.linear_valid();
-                    xr_vel_flags.angular_valid = vel_flags.angular_valid();
+                    xr_vel_flags.linear_valid = true;
+                    xr_vel_flags.angular_valid = true;
                     Ok(location)
                 }
                 Err(err) => Err(err),
@@ -195,15 +191,11 @@ fn update_space_transforms(
         };
         if let Ok(space_location) = space_location {
             let flags = OxrSpaceLocationFlags(space_location.location_flags);
-            if flags.pos_valid() {
-                transform.translation = space_location.pose.position.to_vec3();
-            }
-            if flags.rot_valid() {
-                transform.rotation = space_location.pose.orientation.to_quat();
-            }
+            transform.translation = space_location.pose.position.to_vec3();
+            transform.rotation = space_location.pose.orientation.to_quat();
             *oxr_space_location_flags = flags;
-            xr_space_location_flags.position_tracked = flags.pos_valid() && flags.pos_tracked();
-            xr_space_location_flags.rotation_tracked = flags.rot_valid() && flags.rot_tracked();
+            xr_space_location_flags.position_tracked = true;
+            xr_space_location_flags.rotation_tracked = true;
         }
     }
 }
