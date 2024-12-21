@@ -252,33 +252,25 @@ fn locate_hands(
                 };
                 let vel = vels[*bone as usize];
                 let flags = OxrSpaceVelocityFlags(vel.velocity_flags);
-                if flags.linear_valid() {
-                    velocity.linear = vel.linear_velocity.to_vec3();
-                }
-                if flags.angular_valid() {
-                    velocity.angular = vel.angular_velocity.to_vec3();
-                }
-                xr_vel_flags.linear_valid = flags.linear_valid();
-                xr_vel_flags.angular_valid = flags.angular_valid();
+                velocity.linear = vel.linear_velocity.to_vec3();
+                velocity.angular = vel.angular_velocity.to_vec3();
+                xr_vel_flags.linear_valid = true;
+                xr_vel_flags.angular_valid = true;
                 *vel_flags = flags;
             }
 
             **bone_radius = joint.radius;
             let flags = OxrSpaceLocationFlags(joint.location_flags);
-            if flags.pos_valid() {
-                transform.translation.x = joint.pose.position.x;
-                transform.translation.y = joint.pose.position.y;
-                transform.translation.z = joint.pose.position.z;
-            }
+            transform.translation.x = joint.pose.position.x;
+            transform.translation.y = joint.pose.position.y;
+            transform.translation.z = joint.pose.position.z;
 
-            if flags.rot_valid() {
-                transform.rotation.x = joint.pose.orientation.x;
-                transform.rotation.y = joint.pose.orientation.y;
-                transform.rotation.z = joint.pose.orientation.z;
-                transform.rotation.w = joint.pose.orientation.w;
-            }
-            xr_location_flags.position_tracked = flags.pos_valid() && flags.pos_tracked();
-            xr_location_flags.rotation_tracked = flags.rot_valid() && flags.rot_tracked();
+            transform.rotation.x = joint.pose.orientation.x;
+            transform.rotation.y = joint.pose.orientation.y;
+            transform.rotation.z = joint.pose.orientation.z;
+            transform.rotation.w = joint.pose.orientation.w;
+            xr_location_flags.position_tracked = true;
+            xr_location_flags.rotation_tracked = true;
             *location_flags = flags;
         }
     }
