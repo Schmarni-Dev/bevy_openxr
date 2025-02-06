@@ -410,7 +410,7 @@ fn init_xr_session(
         usage_flags: SwapchainUsageFlags::COLOR_ATTACHMENT | SwapchainUsageFlags::SAMPLED,
         format,
         // TODO() add support for multisampling
-        sample_count: 4,
+        sample_count: 1,
         width: resolution.x,
         height: resolution.y,
         face_count: 1,
