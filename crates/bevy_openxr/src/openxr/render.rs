@@ -9,6 +9,7 @@ use bevy::{
     },
     transform::TransformSystem,
 };
+
 use bevy_mod_xr::{
     camera::{calculate_projection, Fov, XrCamera, XrProjection, XrViewInit},
     session::{
@@ -226,13 +227,16 @@ pub fn locate_views(
     } else {
         frame_state.predicted_display_time
     };
-    let (flags, xr_views) = session
+    let Ok((flags, xr_views)) = session
         .locate_views(
             openxr::ViewConfigurationType::PRIMARY_STEREO,
             time,
             &ref_space,
         )
-        .expect("Failed to locate views");
+        .inspect_err(|err| warn!("failed to locate views: {err}"))
+    else {
+        return;
+    };
 
     match (
         flags & ViewStateFlags::ORIENTATION_VALID == ViewStateFlags::ORIENTATION_VALID,
