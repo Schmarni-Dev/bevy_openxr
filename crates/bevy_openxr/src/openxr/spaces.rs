@@ -8,8 +8,7 @@ use bevy_mod_xr::{
     },
 };
 use openxr::{
-    sys, HandJointLocation, HandJointLocations, HandJointVelocities, HandJointVelocity,
-    ReferenceSpaceType, SpaceLocationFlags, SpaceVelocityFlags, HAND_JOINT_COUNT,
+    HAND_JOINT_COUNT, HandJointLocation, HandJointLocations, HandJointVelocities, HandJointVelocity, ReferenceSpaceType, SpaceLocationFlags, SpaceVelocityFlags, sys::{self, Handle as _},
 };
 
 use crate::{

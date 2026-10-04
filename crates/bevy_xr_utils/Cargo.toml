@@ -18,7 +18,7 @@ bevy = { workspace = true, default-features = true }
 
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
 openxr.workspace = true
-openxr_mndx_xdev_space = "0.1.0"
+openxr_mndx_xdev_space = "0.3.0"
 
 [lints.clippy]
 too_many_arguments = "allow"

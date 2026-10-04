@@ -81,7 +81,7 @@ macro_rules! unavailable_exts {
                 )*
                 for ext in required_exts.0.other.iter() {
                     if !self.0.other.contains(ext) {
-                        exts.push(std::borrow::Cow::Owned(ext.clone()))
+                        exts.push(std::borrow::Cow::Owned(std::ffi::CStr::from_bytes_with_nul(ext).unwrap().to_str().unwrap().to_string()))
                     }
                 }
                 exts

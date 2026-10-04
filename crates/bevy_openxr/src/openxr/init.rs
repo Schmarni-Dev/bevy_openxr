@@ -239,10 +239,7 @@ impl OxrInitPlugin {
         #[cfg(windows)]
         let entry = OxrEntry(openxr::Entry::linked());
         #[cfg(not(windows))]
-        let entry = OxrEntry(unsafe { openxr::Entry::load()? });
-
-        #[cfg(target_os = "android")]
-        entry.initialize_android_loader()?;
+        let entry = OxrEntry(unsafe { openxr::Entry::load(&())? });
 
         let available_exts = entry.enumerate_extensions()?;
 

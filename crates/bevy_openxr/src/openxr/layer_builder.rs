@@ -63,7 +63,7 @@ impl LayerProvider for ProjectionLayer {
 }
 
 impl LayerProvider for PassthroughLayer {
-    fn get(&self, world: &World) -> Option<Box<dyn CompositionLayer>> {
+    fn get(&self, world: &World) -> Option<Box<dyn CompositionLayer<'_>>> {
         Some(Box::new(
             CompositionLayerPassthrough::new()
                 .layer_handle(world.get_resource::<OxrPassthroughLayer>()?)

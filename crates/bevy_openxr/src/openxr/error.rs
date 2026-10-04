@@ -9,8 +9,8 @@ use thiserror::Error;
 pub enum OxrError {
     #[error("OpenXR error: {0}")]
     OpenXrError(#[from] openxr::sys::Result),
-    #[error("OpenXR loading error: {0}")]
-    OpenXrLoadingError(#[from] openxr::LoadError),
+    #[error("OpenXR entry error: {0}")]
+    OpenXrEntryError(#[from] openxr::EntryError),
     #[error("WGPU instance error: {0}")]
     WgpuInstanceError(#[from] wgpu_hal::InstanceError),
     #[error("WGPU device error: {0}")]

@@ -48,6 +48,7 @@ impl OxrEntry {
             },
             &required_exts.into(),
             layers,
+            &(),
         )?;
 
         Ok(OxrInstance(instance, backend, app_info))
@@ -324,7 +325,7 @@ impl OxrPassthrough {
 ///
 /// See [`openxr::PassthroughLayer`] for available methods.
 #[derive(Resource, Deref, DerefMut)]
-pub struct OxrPassthroughLayer(pub openxr::PassthroughLayer);
+pub struct OxrPassthroughLayer(pub openxr::PassthroughLayerFB);
 
 #[derive(Resource, Deref, DerefMut, Default)]
 pub struct OxrRenderLayers(pub Vec<Box<dyn LayerProvider + Send + Sync>>);
