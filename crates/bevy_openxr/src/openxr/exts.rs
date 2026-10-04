@@ -174,7 +174,58 @@ macro_rules! impl_ext {
             $macro! {
                 OxrExtensions;
                 almalence_digital_lens_control,
+                #[cfg(target_os = "android")]
+                android_trackables,
+                #[cfg(target_os = "android")]
+                android_device_anchor_persistence,
+                #[cfg(target_os = "android")]
+                android_face_tracking,
+                #[cfg(target_os = "android")]
+                android_passthrough_camera_state,
+                #[cfg(target_os = "android")]
+                android_composition_layer_passthrough_mesh,
+                #[cfg(target_os = "android")]
+                android_raycast,
+                #[cfg(target_os = "android")]
+                android_performance_metrics,
+                #[cfg(target_os = "android")]
+                android_trackables_object,
+                #[cfg(target_os = "android")]
+                android_unbounded_reference_space,
+                #[cfg(target_os = "android")]
+                android_anchor_sharing_export,
+                #[cfg(target_os = "android")]
+                android_mouse_interaction,
+                #[cfg(target_os = "android")]
+                android_trackables_marker,
+                #[cfg(target_os = "android")]
+                android_trackables_qr_code,
+                #[cfg(target_os = "android")]
+                android_trackables_image,
+                #[cfg(target_os = "android")]
+                android_scene_meshing,
+                #[cfg(target_os = "android")]
+                android_spatial_object_tracking,
+                #[cfg(target_os = "android")]
+                android_spatial_discovery_raycast,
+                #[cfg(target_os = "android")]
+                android_spatial_entity_bound_anchor,
+                #[cfg(target_os = "android")]
+                android_spatial_component_subsumed_by,
+                #[cfg(target_os = "android")]
+                android_spatial_anchor_space,
                 bd_controller_interaction,
+                bd_body_tracking,
+                bd_facial_simulation,
+                bd_spatial_sensing,
+                bd_spatial_anchor,
+                bd_spatial_anchor_sharing,
+                bd_spatial_scene,
+                bd_spatial_mesh,
+                bd_future_progress,
+                bd_spatial_plane,
+                bd_ultra_controller_interaction,
+                bd_spatial_audio_rendering,
                 epic_view_configuration_fov,
                 ext_performance_settings,
                 ext_thermal_query,
@@ -190,7 +241,10 @@ macro_rules! impl_ext {
                 ext_samsung_odyssey_controller,
                 ext_hp_mixed_reality_controller,
                 ext_palm_pose,
+                ext_frame_synthesis,
                 ext_uuid,
+                ext_render_model,
+                ext_interaction_render_model,
                 ext_hand_interaction,
                 ext_active_action_set_priority,
                 ext_local_floor,
@@ -198,6 +252,16 @@ macro_rules! impl_ext {
                 ext_plane_detection,
                 ext_future,
                 ext_user_presence,
+                ext_composition_layer_inverted_alpha,
+                ext_spatial_entity,
+                ext_spatial_plane_tracking,
+                ext_spatial_marker_tracking,
+                ext_spatial_anchor,
+                ext_spatial_persistence,
+                ext_spatial_persistence_operations,
+                ext_interaction_profile_battery_state_display,
+                ext_loader_init_properties,
+                ext_view_configuration_views_change,
                 fb_composition_layer_image_layout,
                 fb_composition_layer_alpha_blend,
                 #[cfg(target_os = "android")]
@@ -249,6 +313,7 @@ macro_rules! impl_ext {
                 htc_passthrough,
                 htc_foveation,
                 htc_anchor,
+                htc_body_tracking,
                 huawei_controller_interaction,
                 #[cfg(target_os = "android")]
                 khr_android_thread_settings,
@@ -268,6 +333,8 @@ macro_rules! impl_ext {
                 khr_d3d11_enable,
                 #[cfg(windows)]
                 khr_d3d12_enable,
+                #[cfg(target_vendor = "apple")]
+                khr_metal_enable,
                 khr_visibility_mask,
                 khr_composition_layer_color_scale_bias,
                 #[cfg(windows)]
@@ -279,29 +346,53 @@ macro_rules! impl_ext {
                 khr_vulkan_enable2,
                 khr_composition_layer_equirect2,
                 khr_binding_modification,
+                khr_extended_struct_name_lengths,
                 khr_swapchain_usage_input_attachment_bit,
                 khr_locate_spaces,
                 khr_maintenance1,
+                khr_generic_controller,
+                logitech_mx_ink_stylus_interaction,
                 meta_foveation_eye_tracked,
                 meta_local_dimming,
                 meta_passthrough_preferences,
                 meta_virtual_keyboard,
                 meta_vulkan_swapchain_create_info,
                 meta_performance_metrics,
+                meta_detached_controllers,
                 meta_headset_id,
+                meta_spatial_entity_discovery,
+                meta_hand_tracking_microgestures,
                 meta_recommended_layer_resolution,
+                meta_spatial_entity_persistence,
                 meta_passthrough_color_lut,
                 meta_spatial_entity_mesh,
                 meta_automatic_layer_filter,
+                meta_body_tracking_full_body,
                 meta_touch_controller_plus,
+                meta_passthrough_layer_resumed_event,
+                meta_body_tracking_calibration,
+                meta_body_tracking_fidelity,
+                meta_spatial_entity_sharing,
                 meta_environment_depth,
+                meta_simultaneous_hands_and_controllers,
+                meta_spatial_entity_semantic_label,
+                meta_colocation_discovery,
+                meta_spatial_entity_group_sharing,
+                meta_environment_raycast,
+                meta_tile_properties_hint,
                 ml_ml2_controller_interaction,
                 ml_frame_end_info,
                 ml_global_dimmer,
                 ml_compat,
                 ml_marker_understanding,
                 ml_localization_map,
+                ml_spatial_anchors,
+                ml_spatial_anchors_storage,
                 ml_user_calibration,
+                ml_system_notifications,
+                ml_world_mesh_detection,
+                ml_facial_expression,
+                ml_view_configuration_depth_range_change,
                 mnd_headless,
                 mnd_swapchain_usage_input_attachment_bit,
                 msft_unbounded_reference_space,
@@ -324,6 +415,7 @@ macro_rules! impl_ext {
                 oculus_external_camera,
                 oppo_controller_interaction,
                 qcom_tracking_optimization_settings,
+                qcom_hand_tracking_gesture,
                 ultraleap_hand_tracking_forearm,
                 valve_analog_threshold,
                 varjo_quad_views,
