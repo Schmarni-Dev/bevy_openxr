@@ -236,9 +236,9 @@ impl OxrInitPlugin {
         OxrEnabledExtensions,
         SessionGraphicsCreateInfo,
     )> {
-        #[cfg(windows)]
-        let entry = OxrEntry(openxr::Entry::linked());
-        #[cfg(not(windows))]
+        #[cfg(feature = "openxr_static")]
+        let entry = OxrEntry(openxr::Entry::linked(&())?);
+        #[cfg(not(feature = "openxr_static"))]
         let entry = OxrEntry(unsafe { openxr::Entry::load(&())? });
 
         let available_exts = entry.enumerate_extensions()?;
@@ -522,9 +522,7 @@ pub fn destroy_xr_session(world: &mut World) {
     world.insert_resource(XrState::Available);
 }
 
-pub fn begin_xr_session(
-    world: &mut World,
-) {
+pub fn begin_xr_session(world: &mut World) {
     let _span = debug_span!("xr_begin_session").entered();
     world
         .get_resource::<OxrSession>()
@@ -536,9 +534,7 @@ pub fn begin_xr_session(
     world.run_schedule(XrPostSessionBegin);
 }
 
-pub fn end_xr_session(
-    world: &mut World,
-) {
+pub fn end_xr_session(world: &mut World) {
     world.run_schedule(XrPreSessionEnd);
     let _span = debug_span!("xr_end_session").entered();
     world

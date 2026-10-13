@@ -10,6 +10,7 @@ keywords = ["gamedev", "bevy", "Xr", "Vr", "OpenXR"]
 [features]
 default = ["vulkan", "d3d12", "passthrough"]
 vulkan = ["dep:ash", "dep:android_system_properties"]
+openxr_static = ["openxr/static"]
 d3d12 = ["wgpu/dx12", "wgpu-hal/dx12", "dep:winapi"]
 passthrough = []
 
