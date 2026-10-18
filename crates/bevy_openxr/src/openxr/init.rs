@@ -159,7 +159,8 @@ impl Plugin for OxrInitPlugin {
                     .insert_resource(OxrSessionStarted(false));
             }
             Err(e) => {
-                error!("Failed to initialize openxr: {e}");
+                error!("Failed to initialize openxr: {e:?}");
+
                 if let Some(cfg) = cfg {
                     if let Ok(WgpuGraphics(device, queue, adapter_info, adapter, wgpu_instance)) =
                         graphics_match!(

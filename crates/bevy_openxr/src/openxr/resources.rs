@@ -1,3 +1,5 @@
+use std::sync::OnceLock;
+
 use bevy::prelude::*;
 use bevy::render::extract_resource::ExtractResource;
 
@@ -13,6 +15,8 @@ use crate::types::*;
 /// See [`openxr::Entry`] for other available methods.
 #[derive(Deref, Clone)]
 pub struct OxrEntry(pub openxr::Entry);
+
+pub static USED_OPENXR_VERSION: OnceLock<openxr::Version> = OnceLock::new();
 
 impl OxrEntry {
     /// Enumerate available extensions for this OpenXR runtime.
@@ -37,19 +41,41 @@ impl OxrEntry {
         }
 
         let required_exts = exts | backend.required_exts();
+        let required_exts = required_exts.into();
 
-        let instance = self.0.create_instance(
+        let mut api_version = openxr::Version::new(1, 1, 36);
+        let mut instance = self.0.create_instance(
             &openxr::ApplicationInfo {
                 application_name: &app_info.name,
                 application_version: app_info.version.to_u32(),
                 engine_name: "Bevy",
                 engine_version: Version::BEVY.to_u32(),
-                api_version: openxr::Version::new(1, 1, 40),
+                api_version,
             },
-            &required_exts.into(),
+            &required_exts,
             layers,
             &(),
-        )?;
+        );
+
+        if let Err(err) = &instance
+            && matches!(err, &openxr::sys::Result::ERROR_API_VERSION_UNSUPPORTED)
+        {
+            api_version = openxr::Version::new(1, 0, 34);
+            instance = self.0.create_instance(
+                &openxr::ApplicationInfo {
+                    application_name: &app_info.name,
+                    application_version: app_info.version.to_u32(),
+                    engine_name: "Bevy",
+                    engine_version: Version::BEVY.to_u32(),
+                    api_version,
+                },
+                &required_exts,
+                layers,
+                &(),
+            );
+        }
+        let instance = instance?;
+        _ = USED_OPENXR_VERSION.set(api_version);
 
         Ok(OxrInstance(instance, backend, app_info))
     }
